@@ -464,14 +464,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Author
-
-**Geryan Roy** ([@Mr-soloDev](https://github.com/Mr-soloDev))
-
-- Email: geryan.roy@icloud.com
-
-## Acknowledgments
-
-- [RunPod](https://runpod.io) for the amazing GPU cloud platform
-- Inspired by Terraform, Kubernetes, and other declarative infrastructure tools
