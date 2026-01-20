@@ -43,30 +43,42 @@ pods:
         # size_gb: 50
 
     runtime:
-      image: "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04"
+      image: "vllm/vllm-openai:latest"
       env:
-        VLLM_PORT: "8000"
+        HF_TOKEN: "${HF_TOKEN}"
         # Add your environment variables here
 
-    # models:
-    #   - id: "llama-3-8b"
-    #     provider: huggingface
-    #     repo: "meta-llama/Meta-Llama-3-8B-Instruct"
-    #     load:
-    #       engine: vllm
-    #       quant: awq
-    #       max_seq_len: 8192
+    # Auto-download models and start inference engines
+    models:
+      - id: "llama-3-8b"
+        provider: huggingface
+        repo: "meta-llama/Meta-Llama-3-8B-Instruct"
+        load:
+          engine: vllm          # vllm, tgi, ollama, or transformers
+          # quant: awq          # Optional: awq, gptq, fp8
+          max_seq_len: 8192
+          # options:            # Optional: engine-specific options
+          #   tensor-parallel-size: 1
 
-    # health_check:
-    #   endpoint: "/health"
-    #   port: 8000
-    #   interval_secs: 30
-    #   timeout_secs: 5
-    #   failure_threshold: 3
+    health_check:
+      endpoint: "/health"
+      port: 8000
+      interval_secs: 30
+      timeout_secs: 5
+      failure_threshold: 3
 
-# Add more pods as needed:
-# - name: "vision"
+# Example: Multiple pods with different models
+# - name: "vision-api"
 #   gpu:
 #     type: "NVIDIA A40"
 #     count: 1
-#   ...
+#   runtime:
+#     image: "ghcr.io/huggingface/text-generation-inference:latest"
+#   ports:
+#     - "8000/http"
+#   models:
+#     - id: "llava-v1.6"
+#       provider: huggingface
+#       repo: "llava-hf/llava-v1.6-mistral-7b-hf"
+#       load:
+#         engine: tgi

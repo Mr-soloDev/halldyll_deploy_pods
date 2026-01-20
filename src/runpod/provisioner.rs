@@ -97,6 +97,41 @@ impl PodProvisioner {
         Ok(pod)
     }
 
+    /// Creates a pod and performs post-provisioning setup (model download, engine start).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pod cannot be created or setup fails.
+    pub async fn create_pod_with_setup(
+        &self,
+        pod_config: &PodConfig,
+        project: &ProjectConfig,
+        spec_hash: &str,
+    ) -> Result<(Pod, Option<super::executor::PostProvisionResult>)> {
+        // Create the pod first
+        let pod = self.create_pod(pod_config, project, spec_hash).await?;
+
+        // If there are models to setup, do post-provisioning
+        if !pod_config.models.is_empty() {
+            info!("Starting post-provisioning setup for pod {}", pod.id);
+            
+            let executor = super::executor::PodExecutor::new(self.client.clone());
+            
+            match executor.post_provision_setup(&pod.id, pod_config).await {
+                Ok(result) => {
+                    info!("Post-provisioning completed: {}", result.summary());
+                    return Ok((pod, Some(result)));
+                }
+                Err(e) => {
+                    warn!("Post-provisioning failed (pod still running): {}", e);
+                    // Don't fail the whole operation, the pod is still usable
+                }
+            }
+        }
+
+        Ok((pod, None))
+    }
+
     /// Resolves GPU type with fallback support.
     async fn resolve_gpu_type_with_fallback(
         &self,

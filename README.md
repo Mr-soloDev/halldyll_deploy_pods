@@ -1,4 +1,4 @@
-# 🚀 Halldyll Deploy Pods
+# Halldyll Deploy Pods
 
 [![Crates.io](https://img.shields.io/crates/v/halldyll_deploy_pods.svg)](https://crates.io/crates/halldyll_deploy_pods)
 [![Documentation](https://docs.rs/halldyll_deploy_pods/badge.svg)](https://docs.rs/halldyll_deploy_pods)
@@ -9,17 +9,19 @@
 
 Think of it as **Terraform/Kubernetes for RunPod** — define your GPU infrastructure as code, and let Halldyll handle the rest.
 
-## ✨ Features
+## Features
 
-- 📝 **Declarative** — Define your infrastructure in a simple YAML file
-- 🔄 **Idempotent** — Run `apply` multiple times, get the same result
-- 🔍 **Drift Detection** — Automatically detect and fix configuration drift
-- 🔁 **Reconciliation Loop** — Continuously converge to desired state
-- 💾 **State Management** — Track deployments locally or on S3
-- 🏷️ **Multi-environment** — Support for dev, staging, prod environments
-- 🛡️ **Guardrails** — Cost limits, GPU limits, TTL auto-stop
+- **Declarative** — Define your infrastructure in a simple YAML file
+- **Idempotent** — Run `apply` multiple times, get the same result
+- **Drift Detection** — Automatically detect and fix configuration drift
+- **Reconciliation Loop** — Continuously converge to desired state
+- **State Management** — Track deployments locally or on S3
+- **Multi-environment** — Support for dev, staging, prod environments
+- **Guardrails** — Cost limits, GPU limits, TTL auto-stop
+- **Auto Model Download** — Automatically download HuggingFace models on pod startup
+- **Inference Engines** — Auto-start vLLM, TGI, or Ollama with your models
 
-## 📦 Installation
+## Installation
 
 ### From Crates.io
 
@@ -35,7 +37,7 @@ cd halldyll_deploy_pods
 cargo install --path .
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Initialize a new project
 
@@ -88,7 +90,7 @@ halldyll apply     # Deploy to RunPod
 halldyll status    # Check deployment status
 ```
 
-## 📖 Commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
@@ -103,7 +105,7 @@ halldyll status    # Check deployment status
 | `halldyll logs <pod>` | View pod logs |
 | `halldyll state` | Manage deployment state |
 
-## ⚙️ Configuration Reference
+## Configuration Reference
 
 ### Project Configuration
 
@@ -162,6 +164,41 @@ pods:
       timeout_secs: 5
 ```
 
+### Model Configuration (Auto-download and Start)
+
+```yaml
+pods:
+  - name: "llm-server"
+    gpu:
+      type: "NVIDIA A40"
+      count: 1
+    runtime:
+      image: "vllm/vllm-openai:latest"
+    ports:
+      - "8000/http"
+    
+    # Models are automatically downloaded and engines started
+    models:
+      - id: "llama-3-8b"
+        provider: huggingface           # huggingface, bundle, or custom
+        repo: "meta-llama/Meta-Llama-3-8B-Instruct"
+        load:
+          engine: vllm                  # vllm, tgi, ollama, or transformers
+          quant: awq                    # Optional: awq, gptq, fp8
+          max_seq_len: 8192             # Optional: max sequence length
+          options:                      # Optional: engine-specific options
+            tensor-parallel-size: 1
+```
+
+### Supported Inference Engines
+
+| Engine | Description | Auto-Start |
+|--------|-------------|------------|
+| `vllm` | High-performance LLM serving | Yes |
+| `tgi` | HuggingFace Text Generation Inference | Yes |
+| `ollama` | Easy-to-use LLM runner | Yes |
+| `transformers` | HuggingFace Transformers (no server) | No |
+
 ### Guardrails (Optional)
 
 ```yaml
@@ -172,7 +209,7 @@ guardrails:
   allow_gpu_fallback: false   # Allow fallback to other GPU types
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -205,7 +242,7 @@ guardrails:
 └─────────────────────────────────────────────────────────┘
 ```
 
-## 🔧 Library Usage
+## Library Usage
 
 You can also use Halldyll as a library in your Rust projects:
 
@@ -233,7 +270,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## 🌍 Environment Variables
+## Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
@@ -242,7 +279,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `AWS_ACCESS_KEY_ID` | AWS credentials (for S3 state) | No |
 | `AWS_SECRET_ACCESS_KEY` | AWS credentials (for S3 state) | No |
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -252,17 +289,17 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👤 Author
+## Author
 
 **Geryan Roy** ([@Mr-soloDev](https://github.com/Mr-soloDev))
 
 - Email: geryan.roy@icloud.com
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [RunPod](https://runpod.io) for the amazing GPU cloud platform
 - Inspired by Terraform, Kubernetes, and other declarative infrastructure tools

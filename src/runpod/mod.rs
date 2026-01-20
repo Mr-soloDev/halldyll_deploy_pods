@@ -8,6 +8,7 @@ mod types;
 mod provisioner;
 mod observer;
 mod health;
+mod executor;
 
 pub use client::RunPodClient;
 pub use types::{
@@ -16,3 +17,6 @@ pub use types::{
 pub use provisioner::PodProvisioner;
 pub use observer::{PodObserver, ObservedPod, ProjectStatus};
 pub use health::{HealthChecker, HealthStatus};
+pub use executor::{
+    PodExecutor, CommandResult, ModelSetupResult, EngineStartResult, PostProvisionResult,
+};

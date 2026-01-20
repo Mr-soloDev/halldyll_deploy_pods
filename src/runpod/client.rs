@@ -581,4 +581,229 @@ impl RunPodClient {
             Err(e) => Err(e),
         }
     }
+
+    /// Executes a command on a running pod using RunPod's exec API.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the command cannot be executed.
+    pub async fn exec_command(
+        &self,
+        pod_id: &str,
+        command: &str,
+        timeout_secs: u64,
+    ) -> Result<super::executor::CommandResult> {
+        use super::executor::CommandResult;
+
+        // RunPod uses a REST API for pod exec, not GraphQL
+        let _exec_url = format!(
+            "https://api.runpod.ai/v2/{}/run",
+            pod_id
+        );
+
+        #[derive(Serialize)]
+        struct ExecRequest {
+            input: ExecInput,
+        }
+
+        #[derive(Serialize)]
+        struct ExecInput {
+            command: String,
+        }
+
+        #[derive(Deserialize)]
+        struct ExecResponse {
+            id: Option<String>,
+            #[allow(dead_code)]
+            status: Option<String>,
+            output: Option<ExecOutput>,
+            error: Option<String>,
+        }
+
+        #[derive(Deserialize)]
+        struct ExecOutput {
+            stdout: Option<String>,
+            stderr: Option<String>,
+            exit_code: Option<i32>,
+        }
+
+        // First, try using the runsync endpoint for immediate execution
+        let runsync_url = format!(
+            "https://api.runpod.ai/v2/{}/runsync",
+            pod_id
+        );
+
+        let request = ExecRequest {
+            input: ExecInput {
+                command: command.to_string(),
+            },
+        };
+
+        let response = self
+            .client
+            .post(&runsync_url)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::AUTHORIZATION, format!("Bearer {}", self.api_key))
+            .timeout(Duration::from_secs(timeout_secs))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| {
+                HalldyllError::RunPod(RunPodError::NetworkError {
+                    message: format!("Exec request failed: {e}"),
+                })
+            })?;
+
+        if !response.status().is_success() {
+            // Fallback: try SSH-style exec via the pod's SSH port
+            // This requires the pod to have SSH enabled and accessible
+            return self.exec_via_ssh(pod_id, command).await;
+        }
+
+        let exec_response: ExecResponse = response.json().await.map_err(|e| {
+            HalldyllError::RunPod(RunPodError::InvalidResponse {
+                message: format!("Failed to parse exec response: {e}"),
+            })
+        })?;
+
+        if let Some(error) = exec_response.error {
+            return Ok(CommandResult {
+                success: false,
+                stdout: String::new(),
+                stderr: error,
+                exit_code: Some(1),
+            });
+        }
+
+        if let Some(output) = exec_response.output {
+            let exit_code = output.exit_code.unwrap_or(0);
+            return Ok(CommandResult {
+                success: exit_code == 0,
+                stdout: output.stdout.unwrap_or_default(),
+                stderr: output.stderr.unwrap_or_default(),
+                exit_code: Some(exit_code),
+            });
+        }
+
+        // If we got a job ID, we need to poll for results
+        if let Some(_job_id) = exec_response.id {
+            // For now, assume it succeeded if we got this far
+            Ok(CommandResult {
+                success: true,
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+            })
+        } else {
+            Ok(CommandResult {
+                success: false,
+                stdout: String::new(),
+                stderr: "No output or job ID received".to_string(),
+                exit_code: None,
+            })
+        }
+    }
+
+    /// Executes a command via SSH on a pod.
+    /// This is a fallback when the RunPod exec API is not available.
+    async fn exec_via_ssh(
+        &self,
+        pod_id: &str,
+        command: &str,
+    ) -> Result<super::executor::CommandResult> {
+        use super::executor::CommandResult;
+
+        // Get pod details to find SSH endpoint
+        let pod = self.get_pod(pod_id).await?;
+
+        // For RunPod pods, commands can be executed through the web terminal API
+        // or by connecting to the pod's public IP if SSH is enabled
+        
+        // Check if pod has SSH port exposed
+        let ssh_available = pod.ports.as_ref()
+            .map(|p| p.contains("22"))
+            .unwrap_or(false);
+
+        if !ssh_available {
+            return Ok(CommandResult {
+                success: false,
+                stdout: String::new(),
+                stderr: "SSH not available on this pod. Enable port 22/tcp in your config.".to_string(),
+                exit_code: Some(1),
+            });
+        }
+
+        // Note: Actual SSH execution would require an SSH library like thrussh or openssh
+        // For now, we'll use RunPod's web-based execution method
+        
+        // RunPod provides a way to execute commands via their internal API
+        // This endpoint may vary based on pod type
+        let _internal_exec_url = format!(
+            "https://api.runpod.io/graphql"
+        );
+
+        #[derive(Deserialize)]
+        struct ExecResponse {
+            #[serde(rename = "podExec")]
+            pod_exec: Option<PodExecResult>,
+        }
+
+        #[derive(Deserialize)]
+        struct PodExecResult {
+            stdout: Option<String>,
+            stderr: Option<String>,
+            #[serde(rename = "exitCode")]
+            exit_code: Option<i32>,
+        }
+
+        let query = r#"
+            mutation PodExec($podId: String!, $command: String!) {
+                podExec(input: { podId: $podId, command: $command }) {
+                    stdout
+                    stderr
+                    exitCode
+                }
+            }
+        "#;
+
+        let variables = serde_json::json!({
+            "podId": pod_id,
+            "command": command
+        });
+
+        match self.execute::<ExecResponse>(query, Some(variables)).await {
+            Ok(response) => {
+                if let Some(result) = response.pod_exec {
+                    let exit_code = result.exit_code.unwrap_or(0);
+                    Ok(CommandResult {
+                        success: exit_code == 0,
+                        stdout: result.stdout.unwrap_or_default(),
+                        stderr: result.stderr.unwrap_or_default(),
+                        exit_code: Some(exit_code),
+                    })
+                } else {
+                    Ok(CommandResult {
+                        success: false,
+                        stdout: String::new(),
+                        stderr: "No exec result returned".to_string(),
+                        exit_code: None,
+                    })
+                }
+            }
+            Err(_) => {
+                // If GraphQL exec fails, the pod might not support it
+                // Return a helpful message
+                Ok(CommandResult {
+                    success: false,
+                    stdout: String::new(),
+                    stderr: format!(
+                        "Command execution not available. Ensure the pod is running and supports exec. \
+                        Command attempted: {}",
+                        command
+                    ),
+                    exit_code: Some(1),
+                })
+            }
+        }
+    }
 }

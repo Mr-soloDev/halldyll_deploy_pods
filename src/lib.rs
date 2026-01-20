@@ -112,5 +112,8 @@ pub use config::{ConfigHasher, ConfigParser, ConfigValidator, DeployConfig};
 pub use error::{HalldyllError, Result};
 pub use planner::{DeploymentPlan, DiffEngine, PlanExecutor};
 pub use reconciler::{DriftReport, ReconciliationResult, Reconciler};
-pub use runpod::{HealthChecker, PodObserver, PodProvisioner, RunPodClient};
+pub use runpod::{
+    HealthChecker, PodObserver, PodProvisioner, RunPodClient,
+    PodExecutor, CommandResult, ModelSetupResult, EngineStartResult, PostProvisionResult,
+};
 pub use state::{DeploymentState, LocalStateStore, S3StateStore, StateStore};
