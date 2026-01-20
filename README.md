@@ -23,10 +23,19 @@ Think of it as **Terraform/Kubernetes for RunPod** — define your GPU infrastru
 
 ## Installation
 
-### From Crates.io
+### CLI Tool (From Crates.io)
 
 ```bash
 cargo install halldyll_deploy_pods
+```
+
+### As a Rust Library
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+halldyll_deploy_pods = "0.1.0"
 ```
 
 ### From Source
