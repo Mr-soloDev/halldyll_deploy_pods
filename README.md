@@ -192,12 +192,89 @@ pods:
 
 ### Supported Inference Engines
 
-| Engine | Description | Auto-Start |
-|--------|-------------|------------|
-| `vllm` | High-performance LLM serving | Yes |
-| `tgi` | HuggingFace Text Generation Inference | Yes |
-| `ollama` | Easy-to-use LLM runner | Yes |
-| `transformers` | HuggingFace Transformers (no server) | No |
+| Engine | Description | Auto-Start | Use Case |
+|--------|-------------|------------|----------|
+| `vllm` | High-performance LLM serving | Yes | Production LLM APIs, OpenAI-compatible |
+| `tgi` | HuggingFace Text Generation Inference | Yes | HuggingFace models, streaming |
+| `ollama` | Easy-to-use LLM runner | Yes | Local development, quick testing |
+| `transformers` | HuggingFace Transformers library | No | Custom scripts, fine-tuning |
+
+### Multi-Model Deployment Example
+
+Deploy different models on different pods:
+
+```yaml
+pods:
+  # LLM API Server
+  - name: "llm-api"
+    gpu:
+      type: "NVIDIA A40"
+      count: 1
+    runtime:
+      image: "vllm/vllm-openai:latest"
+    ports:
+      - "8000/http"
+    models:
+      - id: "llama-3-8b"
+        provider: huggingface
+        repo: "meta-llama/Meta-Llama-3-8B-Instruct"
+        load:
+          engine: vllm
+          max_seq_len: 8192
+
+  # Embedding Server
+  - name: "embeddings"
+    gpu:
+      type: "NVIDIA RTX 4090"
+      count: 1
+    runtime:
+      image: "ghcr.io/huggingface/text-embeddings-inference:latest"
+    ports:
+      - "8080/http"
+    models:
+      - id: "bge-large"
+        provider: huggingface
+        repo: "BAAI/bge-large-en-v1.5"
+        load:
+          engine: tgi
+
+  # Vision Model
+  - name: "vision-api"
+    gpu:
+      type: "NVIDIA A40"
+      count: 1
+    runtime:
+      image: "ghcr.io/huggingface/text-generation-inference:latest"
+    ports:
+      - "8000/http"
+    models:
+      - id: "llava"
+        provider: huggingface
+        repo: "llava-hf/llava-v1.6-mistral-7b-hf"
+        load:
+          engine: tgi
+```
+
+### Quantization Options
+
+Reduce memory usage with quantization:
+
+```yaml
+models:
+  - id: "llama-70b-awq"
+    provider: huggingface
+    repo: "TheBloke/Llama-2-70B-Chat-AWQ"
+    load:
+      engine: vllm
+      quant: awq              # 4-bit AWQ quantization
+      max_seq_len: 4096
+```
+
+| Quant Method | Memory Reduction | Quality | Speed |
+|--------------|------------------|---------|-------|
+| `awq` | ~75% | High | Fast |
+| `gptq` | ~75% | High | Medium |
+| `fp8` | ~50% | Very High | Fast |
 
 ### Guardrails (Optional)
 
@@ -249,7 +326,7 @@ You can also use Halldyll as a library in your Rust projects:
 ```rust
 use halldyll_deploy_pods::{
     ConfigParser, ConfigValidator, DeployConfig,
-    RunPodClient, PodProvisioner, PodObserver,
+    RunPodClient, PodProvisioner, PodObserver, PodExecutor,
     Reconciler, StateStore, LocalStateStore,
 };
 
@@ -264,7 +341,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create RunPod client
     let client = RunPodClient::new(&std::env::var("RUNPOD_API_KEY")?)?;
     
-    // ... use provisioner, observer, reconciler
+    // Create provisioner and deploy with auto model setup
+    let provisioner = PodProvisioner::new(client.clone());
+    let (pod, setup_result) = provisioner.create_pod_with_setup(
+        &config.pods[0],
+        &config.project,
+        "config-hash"
+    ).await?;
+    
+    // Check model setup results
+    if let Some(result) = setup_result {
+        println!("Setup: {}", result.summary());
+    }
     
     Ok(())
 }
@@ -275,6 +363,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `RUNPOD_API_KEY` | Your RunPod API key | Yes |
+| `HF_TOKEN` | HuggingFace API token (for gated models like Llama) | For gated models |
 | `HALLDYLL_CONFIG` | Path to config file | No |
 | `AWS_ACCESS_KEY_ID` | AWS credentials (for S3 state) | No |
 | `AWS_SECRET_ACCESS_KEY` | AWS credentials (for S3 state) | No |
