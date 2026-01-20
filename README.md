@@ -330,42 +330,116 @@ guardrails:
 
 ## Library Usage
 
-You can also use Halldyll as a library in your Rust projects:
+You can use Halldyll as a Rust library in your projects:
+
+### Add to Cargo.toml
+
+```toml
+[dependencies]
+halldyll_deploy_pods = "0.1.0"
+tokio = { version = "1", features = ["full"] }
+```
+
+### Basic Example: Parse and Validate Config
+
+```rust
+use halldyll_deploy_pods::{ConfigParser, ConfigValidator};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse configuration from YAML file
+    let config = ConfigParser::parse_file("halldyll.deploy.yaml")?;
+    
+    // Validate the configuration
+    ConfigValidator::validate(&config)?;
+    
+    println!("Project: {}", config.project.name);
+    println!("Pods: {}", config.pods.len());
+    
+    Ok(())
+}
+```
+
+### Full Example: Deploy Pods with Model Setup
 
 ```rust
 use halldyll_deploy_pods::{
-    ConfigParser, ConfigValidator, DeployConfig,
+    ConfigParser, ConfigValidator,
     RunPodClient, PodProvisioner, PodObserver, PodExecutor,
-    Reconciler, StateStore, LocalStateStore,
 };
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Parse configuration
+    // Parse and validate configuration
     let config = ConfigParser::parse_file("halldyll.deploy.yaml")?;
-    
-    // Validate
     ConfigValidator::validate(&config)?;
     
     // Create RunPod client
-    let client = RunPodClient::new(&std::env::var("RUNPOD_API_KEY")?)?;
+    let api_key = std::env::var("RUNPOD_API_KEY")?;
+    let client = RunPodClient::new(&api_key)?;
     
-    // Create provisioner and deploy with auto model setup
-    let provisioner = PodProvisioner::new(client.clone());
+    // Create provisioner
+    let mut provisioner = PodProvisioner::new(client.clone());
+    provisioner.init_gpu_types().await?;
+    
+    // Deploy pod with automatic model download and engine startup
     let (pod, setup_result) = provisioner.create_pod_with_setup(
         &config.pods[0],
         &config.project,
         "config-hash"
     ).await?;
     
+    println!("Pod created: {} (ID: {})", pod.name, pod.id);
+    
     // Check model setup results
     if let Some(result) = setup_result {
         println!("Setup: {}", result.summary());
+        for model in &result.model_results {
+            println!("  Model '{}': {}", model.model_id, 
+                if model.success { "OK" } else { "FAILED" });
+        }
     }
     
     Ok(())
 }
 ```
+
+### Example: Execute Commands on a Pod
+
+```rust
+use halldyll_deploy_pods::{RunPodClient, PodExecutor};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = RunPodClient::new(&std::env::var("RUNPOD_API_KEY")?)?;
+    let executor = PodExecutor::new(client);
+    
+    // Execute a command on a running pod
+    let result = executor.execute_command(
+        "pod-id-here",
+        "nvidia-smi",
+        Some(30)
+    ).await?;
+    
+    println!("Output: {}", result.stdout);
+    
+    Ok(())
+}
+```
+
+### Available Types
+
+| Type | Description |
+|------|-------------|
+| `ConfigParser` | Parse YAML configuration files |
+| `ConfigValidator` | Validate configuration |
+| `DeployConfig` | Configuration struct |
+| `RunPodClient` | RunPod API client |
+| `PodProvisioner` | Create and manage pods |
+| `PodObserver` | Observe pod states |
+| `PodExecutor` | Execute commands on pods |
+| `Reconciler` | Reconcile desired vs actual state |
+| `LocalStateStore` | Local state storage |
+| `S3StateStore` | S3 state storage |
 
 ## Environment Variables
 
