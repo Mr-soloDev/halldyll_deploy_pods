@@ -1,0 +1,99 @@
+[package]
+name = "halldyll_deploy_pods"
+version = "0.1.0"
+edition = "2024"
+authors = ["Geryan Roy <geryan.roy@icloud.com>"]
+description = "Declarative, idempotent, and reconcilable deployment system for RunPod GPU pods"
+license = "MIT"
+repository = "https://github.com/Mr-soloDev/halldyll_deploy_pods"
+homepage = "https://github.com/Mr-soloDev/halldyll_deploy_pods"
+documentation = "https://docs.rs/halldyll_deploy_pods"
+keywords = ["runpod", "deployment", "gpu", "orchestration", "declarative"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+rust-version = "1.85"
+
+[lib]
+name = "halldyll_deploy_pods"
+path = "src/lib.rs"
+
+[[bin]]
+name = "halldyll"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.43", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# HTTP client for RunPod API
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Environment variables
+dotenvy = "0.15"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "2.0"
+
+# Hashing for config comparison
+sha2 = "0.10"
+hex = "0.4"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID for unique identifiers
+uuid = { version = "1.11", features = ["v4", "serde"] }
+
+# AWS S3 for remote state
+aws-sdk-s3 = "1.65"
+aws-config = { version = "1.5", features = ["behavior-version-latest"] }
+
+# Validation
+validator = { version = "0.19", features = ["derive"] }
+
+# Colored terminal output
+colored = "2.2"
+
+# Table formatting for CLI
+tabled = "0.17"
+
+# Async trait
+async-trait = "0.1"
+
+# Directory handling
+dirs = "5.0"
+
+# Hostname for lock identification
+hostname = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.14"
+mockall = "0.13"
+wiremock = "0.6"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"

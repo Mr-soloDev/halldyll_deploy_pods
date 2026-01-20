@@ -1,0 +1,72 @@
+# Halldyll Deployment Configuration
+# Documentation: https://github.com/halldyll/halldyll_deploy_pods
+
+project:
+  name: "my-project"
+  environment: "dev"
+  # region: "EU"  # Optional: EU, US, etc.
+  cloud_type: SECURE  # SECURE or COMMUNITY
+  compute_type: GPU
+
+state:
+  backend: local  # local or s3
+  # For S3 backend:
+  # bucket: "my-state-bucket"
+  # prefix: "halldyll/my-project"
+  # region: "us-east-1"
+
+# Optional guardrails
+# guardrails:
+#   max_hourly_cost: 10.0  # Maximum hourly cost in USD
+#   max_gpus: 4            # Maximum total GPUs
+#   ttl_hours: 24          # Auto-stop after N hours
+#   allow_gpu_fallback: false
+
+pods:
+  - name: "inference"
+    gpu:
+      type: "NVIDIA A40"
+      count: 1
+      # min_vram_gb: 40
+      # fallback:
+      #   - "NVIDIA L40S"
+      #   - "NVIDIA RTX A6000"
+
+    ports:
+      - "22/tcp"
+      - "8000/http"
+
+    volumes:
+      - name: "hf-cache"
+        mount: "/root/.cache/huggingface"
+        persistent: true
+        # size_gb: 50
+
+    runtime:
+      image: "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04"
+      env:
+        VLLM_PORT: "8000"
+        # Add your environment variables here
+
+    # models:
+    #   - id: "llama-3-8b"
+    #     provider: huggingface
+    #     repo: "meta-llama/Meta-Llama-3-8B-Instruct"
+    #     load:
+    #       engine: vllm
+    #       quant: awq
+    #       max_seq_len: 8192
+
+    # health_check:
+    #   endpoint: "/health"
+    #   port: 8000
+    #   interval_secs: 30
+    #   timeout_secs: 5
+    #   failure_threshold: 3
+
+# Add more pods as needed:
+# - name: "vision"
+#   gpu:
+#     type: "NVIDIA A40"
+#     count: 1
+#   ...
